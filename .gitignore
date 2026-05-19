@@ -1,0 +1,85 @@
+# ============================================================
+# MirAI — .gitignore
+# Expo + React Native + TypeScript + Supabase
+# ============================================================
+
+# ─── Node ────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ─── Expo ────────────────────────────────────────────────────
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# ─── Metro ───────────────────────────────────────────────────
+.metro-health-check*
+
+# ─── Native builds ───────────────────────────────────────────
+ios/
+android/
+*.ipa
+*.apk
+*.aab
+
+# ─── Environment & secrets ───────────────────────────────────
+.env
+.env.local
+.env.development
+.env.production
+.env.staging
+.env.test
+!.env.example
+
+# ─── Supabase ────────────────────────────────────────────────
+supabase/.branches/
+supabase/.temp/
+# Keep functions/ and migrations/ committed
+
+# ─── TypeScript ──────────────────────────────────────────────
+*.tsbuildinfo
+
+# ─── OS ──────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ─── IDE ─────────────────────────────────────────────────────
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ─── Testing ─────────────────────────────────────────────────
+coverage/
+.nyc_output/
+junit.xml
+
+# ─── Logs ────────────────────────────────────────────────────
+logs/
+*.log
+
+# ─── EAS (Expo Application Services) ────────────────────────
+.eas/
+
+# ─── Misc ────────────────────────────────────────────────────
+*.pem
+*.p8
+*.p12
+*.mobileprovision
+GoogleService-Info.plist
+google-services.json

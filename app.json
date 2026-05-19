@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "MirAI",
+    "slug": "MirAI",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "mirai",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0B0F17",
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B0F17"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.mirai.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "MirAI uses the camera for screenshot analysis.",
+        "NSPhotoLibraryUsageDescription": "MirAI accesses photos for screenshot analysis.",
+        "NSMicrophoneUsageDescription": "MirAI uses the microphone for voice interaction."
+      }
+    },
+    "android": {
+      "package": "com.mirai.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#0B0F17"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0B0F17",
+          "imageWidth": 200
+        }
+      ],
+      "expo-asset"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      }
+    }
+  }
+}

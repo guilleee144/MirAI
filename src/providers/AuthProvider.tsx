@@ -39,17 +39,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [])
 
   // Route protection
-  useEffect(() => {
-    if (isLoading) return
+useEffect(() => {
+  if (isLoading) return
 
-    const inAuthGroup = segments[0] === '(auth)'
+  const inAuthGroup = segments[0] === '(auth)'
+  const inOnboarding = (segments as string[]).includes('onboarding')
 
-    if (!session && !inAuthGroup) {
-      router.replace('/(auth)/login')
-    } else if (session && inAuthGroup) {
-      router.replace('/(app)')
-    }
-  }, [session, segments, isLoading])
+  if (!session && !inAuthGroup) {
+    router.replace('/(auth)/login' as any)
+  } else if (session && inAuthGroup && !inOnboarding) {
+    router.replace('/(app)' as any)
+  }
+}, [session, segments, isLoading])
 
   const signOut = async () => {
     await supabase.auth.signOut()

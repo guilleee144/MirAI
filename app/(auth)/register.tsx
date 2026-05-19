@@ -55,7 +55,7 @@ export default function RegisterScreen() {
     }
 
     // Go to onboarding
-    router.replace('/(app)')
+   router.replace('/(auth)/onboarding/welcome' as any)
   }
 
   return (

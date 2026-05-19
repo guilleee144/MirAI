@@ -38,25 +38,42 @@ export default function RegisterScreen() {
     resolver: zodResolver(registerSchema),
   })
 
-  const onSubmit = async (data: RegisterForm) => {
-    setIsLoading(true)
-    const { error } = await supabase.auth.signUp({
-      email: data.email,
-      password: data.password,
-      options: {
-        data: { username: data.username },
-      },
-    })
+const onSubmit = async (data: RegisterForm) => {
+  setIsLoading(true)
+  
+  const { data: authData, error } = await supabase.auth.signUp({
+    email: data.email,
+    password: data.password,
+    options: {
+      data: { username: data.username },
+    },
+  })
+
+  if (error) {
     setIsLoading(false)
-
-    if (error) {
-      Alert.alert('Error', error.message)
-      return
-    }
-
-    // Go to onboarding
-   router.replace('/(auth)/onboarding/welcome' as any)
+    Alert.alert('Error', error.message)
+    return
   }
+
+  // Crear perfil manualmente sin depender del trigger
+  if (authData.user) {
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert({
+        id: authData.user.id,
+        username: data.username,
+        display_name: data.username,
+      })
+
+    if (profileError) {
+      console.log('Profile error:', profileError.message)
+      // No bloqueamos — el usuario se creó igualmente
+    }
+  }
+
+  setIsLoading(false)
+  router.replace('/(app)' as any)
+}
 
   return (
     <View className="flex-1 bg-[#0B0F17]">

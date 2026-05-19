@@ -1,5 +1,6 @@
 // app/(app)/discover.tsx
 import { useState } from 'react'
+import { useRouter } from 'expo-router'
 import {
   View,
   Text,
@@ -17,8 +18,12 @@ import { useDebounce } from '@/hooks/useDebounce'
 type Tab = 'foryou' | 'anime' | 'manga'
 
 function MediaCard({ media }: { media: AniListMedia }) {
+  const router = useRouter()
   return (
-    <TouchableOpacity activeOpacity={0.85}>
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={() => router.push(`/(app)/media/${media.id}?type=${media.type}` as any)}
+    >
       <View style={{ width: 130, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
         {media.coverImage.large ? (
           <Image
@@ -49,12 +54,19 @@ function MediaCard({ media }: { media: AniListMedia }) {
   )
 }
 
-function MediaRow({ title, data, isLoading }: { title: string; data: AniListMedia[] | undefined; isLoading: boolean }) {
+function MediaRow({ title, data, isLoading, listType }: {
+  title: string
+  data: AniListMedia[] | undefined
+  isLoading: boolean
+  listType: string
+}) {
+  const router = useRouter()
+
   return (
     <View style={{ marginTop: 28 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 14 }}>
         <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>{title}</Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={() => router.push(`/(app)/list/${listType}` as any)}>
           <Text style={{ color: '#6C5CE7', fontSize: 13 }}>See all</Text>
         </TouchableOpacity>
       </View>
@@ -150,10 +162,10 @@ export default function DiscoverScreen() {
         {!isSearching && (
           <>
             {(activeTab === 'foryou' || activeTab === 'anime') && (
-              <MediaRow title="Trending Anime" data={trendingAnime?.media} isLoading={loadingAnime} />
+              <MediaRow title="Trending Anime" data={trendingAnime?.media} isLoading={loadingAnime} listType="trending-anime" />
             )}
             {(activeTab === 'foryou' || activeTab === 'manga') && (
-              <MediaRow title="Trending Manga" data={trendingManga?.media} isLoading={loadingManga} />
+              <MediaRow title="Trending Manga" data={trendingManga?.media} isLoading={loadingManga} listType="trending-manga" />
             )}
           </>
         )}

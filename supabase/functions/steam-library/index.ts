@@ -22,6 +22,8 @@ serve(async (req) => {
     }
 
     const STEAM_API_KEY = Deno.env.get('STEAM_API_KEY')
+    console.log('Steam ID received:', steamId)
+    console.log('API Key exists:', !!STEAM_API_KEY)
     if (!STEAM_API_KEY) {
       return new Response(
         JSON.stringify({ error: 'Steam API key not configured' }),

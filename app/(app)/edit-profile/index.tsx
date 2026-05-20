@@ -8,9 +8,11 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
+import * as ImagePicker from 'expo-image-picker'
 import { useAuth } from '@/providers/AuthProvider'
 import { supabase } from '@/services/supabase'
 import type { Database } from '@/types/supabase'
@@ -31,11 +33,13 @@ export default function EditProfileScreen() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
 
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [bio, setBio] = useState('')
   const [selectedMood, setSelectedMood] = useState<string | null>(null)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
 
   useEffect(() => {
     if (!user) return
@@ -55,8 +59,82 @@ export default function EditProfileScreen() {
       setDisplayName(data.display_name ?? '')
       setBio(data.bio ?? '')
       setSelectedMood(data.current_mood ?? null)
+      setAvatarUrl(data.avatar_url ? `${data.avatar_url}?t=${Date.now()}` : null)
     }
     setIsLoading(false)
+  }
+
+  const handlePickPhoto = async () => {
+// Borrar avatar anterior
+const { data: existingFiles } = await supabase.storage
+  .from('avatars')
+  .list(user!.id)
+
+if (existingFiles && existingFiles.length > 0) {
+  const filesToDelete = existingFiles.map(f => `${user!.id}/${f.name}`)
+  await supabase.storage.from('avatars').remove(filesToDelete)
+}
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    })
+
+    if (result.canceled || !result.assets[0]) return
+
+    const asset = result.assets[0]
+    if (!asset.uri) return
+
+setIsUploadingPhoto(true)
+
+try {
+  const fileExt = asset.uri.split('.').pop()?.toLowerCase() ?? 'jpg'
+const fileName = `${user!.id}/avatar_${Date.now()}.${fileExt}`
+  const contentType = `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`
+
+  // React Native forma correcta de subir archivos
+  const formData = new FormData()
+  formData.append('file', {
+    uri: asset.uri,
+    name: `avatar.${fileExt}`,
+    type: contentType,
+  } as any)
+
+  const { error: uploadError } = await supabase.storage
+    .from('avatars')
+    .upload(fileName, formData, {
+      contentType: contentType,
+      upsert: true,
+    })
+
+  if (uploadError) {
+    Alert.alert('Upload error', uploadError.message)
+    return
+  }
+
+  const { data: urlData } = supabase.storage
+    .from('avatars')
+    .getPublicUrl(fileName)
+
+  const publicUrl = urlData.publicUrl
+
+  await supabase
+    .from('profiles')
+    .update({ avatar_url: publicUrl })
+    .eq('id', user!.id)
+
+
+  setAvatarUrl(`${publicUrl}?t=${Date.now()}`)
+  Alert.alert('Success', 'Photo updated!')
+
+} catch (e) {
+  console.error(e)
+  Alert.alert('Error', 'Failed to upload photo. Please try again.')
+} finally {
+  setIsUploadingPhoto(false)
+}
   }
 
   const handleSave = async () => {
@@ -97,6 +175,8 @@ export default function EditProfileScreen() {
     )
   }
 
+  const username_initial = username.charAt(0).toUpperCase()
+
   return (
     <View style={{ flex: 1, backgroundColor: '#0B0F17' }}>
       <LinearGradient
@@ -124,17 +204,26 @@ export default function EditProfileScreen() {
 
         {/* Avatar */}
         <View style={{ alignItems: 'center', marginBottom: 32 }}>
-          <View style={{ position: 'relative' }}>
-            <LinearGradient
-              colors={['#6C5CE7', '#00D1FF']}
-              style={{ width: 90, height: 90, borderRadius: 45, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <Text style={{ color: '#fff', fontSize: 36, fontWeight: '800' }}>
-                {username.charAt(0).toUpperCase()}
-              </Text>
-            </LinearGradient>
-            <TouchableOpacity
-              style={{
+          <TouchableOpacity onPress={handlePickPhoto} activeOpacity={0.8}>
+            <View style={{ position: 'relative' }}>
+              {avatarUrl ? (
+                <Image
+          source={{ uri: `${avatarUrl}?t=${Date.now()}` }}
+          style={{ width: 90, height: 90, borderRadius: 45, borderWidth: 2, borderColor: 'rgba(108,92,231,0.5)' }}
+        />
+              ) : (
+                <LinearGradient
+                  colors={['#6C5CE7', '#00D1FF']}
+                  style={{ width: 90, height: 90, borderRadius: 45, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 36, fontWeight: '800' }}>
+                    {username_initial}
+                  </Text>
+                </LinearGradient>
+              )}
+
+              {/* Upload overlay */}
+              <View style={{
                 position: 'absolute',
                 bottom: 0,
                 right: 0,
@@ -146,13 +235,17 @@ export default function EditProfileScreen() {
                 justifyContent: 'center',
                 borderWidth: 2,
                 borderColor: '#0B0F17',
-              }}
-            >
-              <Text style={{ color: '#fff', fontSize: 12 }}>✎</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={{ color: '#7B8496', fontSize: 12, marginTop: 8 }}>
-            Tap to change photo
+              }}>
+                {isUploadingPhoto ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={{ color: '#fff', fontSize: 12 }}>✎</Text>
+                )}
+              </View>
+            </View>
+          </TouchableOpacity>
+          <Text style={{ color: '#7B8496', fontSize: 12, marginTop: 10 }}>
+            {isUploadingPhoto ? 'Uploading...' : 'Tap to change photo'}
           </Text>
         </View>
 

@@ -66,7 +66,8 @@ export default function AppLayout() {
           tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon="◈" label="Profile" />,
         }}
       />
-      <Tabs.Screen name="edit-profile" options={{ href: null }} />
+      <Tabs.Screen name="connect-steam/index" options={{ href: null }} />
+      <Tabs.Screen name="edit-profile/index" options={{ href: null }} />
       <Tabs.Screen name="media/[id]" options={{ href: null }} />
       <Tabs.Screen name="list/[type]" options={{ href: null }} />
     </Tabs>

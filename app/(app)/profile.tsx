@@ -1,11 +1,13 @@
 // app/(app)/profile.tsx
 import { useState, useEffect } from 'react'
+
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Image
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import Svg, { Polygon, Circle, Line, Text as SvgText } from 'react-native-svg'
@@ -14,6 +16,8 @@ import { useAuth } from '@/providers/AuthProvider'
 import { supabase } from '@/services/supabase'
 import { AniListLogo, MyAnimeListLogo, SteamLogo } from '@/components/ui/ConnectionLogos'
 import type { Database } from '@/types/supabase'
+import { useFocusEffect } from 'expo-router'
+import { useCallback } from 'react'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
 type UserTaste = Database['public']['Tables']['user_taste']['Row']
@@ -96,10 +100,12 @@ export default function ProfileScreen() {
   const [taste, setTaste] = useState<UserTaste | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
+useFocusEffect(
+  useCallback(() => {
     if (!user) return
     loadProfile()
   }, [user])
+)
 
   const loadProfile = async () => {
     if (!user) return
@@ -152,30 +158,37 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Avatar + info */}
-        <View style={{ paddingHorizontal: 20, marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-          <LinearGradient
-            colors={['#6C5CE7', '#00D1FF']}
-            style={{ width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Text style={{ color: '#fff', fontSize: 28, fontWeight: '800' }}>
-              {username.charAt(0).toUpperCase()}
-            </Text>
-          </LinearGradient>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: '#fff', fontSize: 20, fontWeight: '700' }}>{username}</Text>
-            <Text style={{ color: '#7B8496', fontSize: 13, marginTop: 2 }}>Level {level} · Anime Fanatic</Text>
-            <View style={{ marginTop: 10 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
-                <Text style={{ color: '#7B8496', fontSize: 11 }}>{xp} XP</Text>
-                <Text style={{ color: '#7B8496', fontSize: 11 }}>{xpForNext} XP</Text>
-              </View>
-              <View style={{ height: 4, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 2 }}>
-                <View style={{ height: 4, width: `${xpProgress}%`, borderRadius: 2, backgroundColor: '#6C5CE7' }} />
-              </View>
-            </View>
-          </View>
-        </View>
+{/* Avatar + info */}
+<View style={{ paddingHorizontal: 20, marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+  {profile?.avatar_url ? (
+    <Image
+  source={{ uri: `${profile.avatar_url}?t=${Date.now()}` }}
+  style={{ width: 72, height: 72, borderRadius: 36, borderWidth: 2, borderColor: 'rgba(108,92,231,0.4)' }}
+/>
+  ) : (
+    <LinearGradient
+      colors={['#6C5CE7', '#00D1FF']}
+      style={{ width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Text style={{ color: '#fff', fontSize: 28, fontWeight: '800' }}>
+        {username.charAt(0).toUpperCase()}
+      </Text>
+    </LinearGradient>
+  )}
+  <View style={{ flex: 1 }}>
+    <Text style={{ color: '#fff', fontSize: 20, fontWeight: '700' }}>{username}</Text>
+    <Text style={{ color: '#7B8496', fontSize: 13, marginTop: 2 }}>Level {level} · Anime Fanatic</Text>
+    <View style={{ marginTop: 10 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
+        <Text style={{ color: '#7B8496', fontSize: 11 }}>{xp} XP</Text>
+        <Text style={{ color: '#7B8496', fontSize: 11 }}>{xpForNext} XP</Text>
+      </View>
+      <View style={{ height: 4, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 2 }}>
+        <View style={{ height: 4, width: `${xpProgress}%`, borderRadius: 2, backgroundColor: '#6C5CE7' }} />
+      </View>
+    </View>
+  </View>
+</View>
 
         {/* Stats */}
         <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
@@ -202,7 +215,9 @@ export default function ProfileScreen() {
           <View style={{ gap: 10 }}>
             <ConnectionCard name="AniList" logo={<AniListLogo size={40} />} connected={false} />
             <ConnectionCard name="MyAnimeList" logo={<MyAnimeListLogo size={40} />} connected={false} />
-            <ConnectionCard name="Steam" logo={<SteamLogo size={40} />} connected={false} />
+            <TouchableOpacity onPress={() => router.push('/(app)/connect-steam' as any)}>
+  <ConnectionCard name="Steam" logo={<SteamLogo size={40} />} connected={false} />
+</TouchableOpacity>
           </View>
         </View>
 

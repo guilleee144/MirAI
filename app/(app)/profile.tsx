@@ -1,11 +1,11 @@
 // app/(app)/profile.tsx
-import { useState, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Image
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import Svg, { Polygon, Circle, Line, Text as SvgText } from 'react-native-svg'
-import { useRouter, useFocusEffect } from 'expo-router'
+import { useRouter } from 'expo-router'
 import { useAuth } from '@/providers/AuthProvider'
 import { supabase } from '@/services/supabase'
 import { AniListLogo, MyAnimeListLogo, SteamLogo } from '@/components/ui/ConnectionLogos'
@@ -82,27 +82,47 @@ export default function ProfileScreen() {
   const [taste, setTaste] = useState<UserTaste | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [steamConnected, setSteamConnected] = useState(false)
+  const [anilistConnected, setAnilistConnected] = useState(false)
+  const [animeCount, setAnimeCount] = useState(0)
+  const [mangaCount, setMangaCount] = useState(0)
+  const [gamesCount, setGamesCount] = useState(0)
+
+  useEffect(() => {
+    if (!user?.id) return
+    loadProfile()
+  }, [user?.id])
 
   const loadProfile = async () => {
     if (!user) return
     setIsLoading(true)
-    const [{ data: profileData }, { data: tasteData }, { data: steamData }] = await Promise.all([
+
+    const [
+      { data: profileData },
+      { data: tasteData },
+      { data: steamData },
+      { data: anilistData },
+      { count: animeC },
+      { count: mangaC },
+      { count: gamesC },
+    ] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', user.id).single(),
       supabase.from('user_taste').select('*').eq('user_id', user.id).single(),
       supabase.from('tracking').select('id').eq('user_id', user.id).eq('content_type', 'game').limit(1),
+      supabase.from('tracking').select('id').eq('user_id', user.id).in('content_type', ['anime', 'manga']).limit(1),
+      supabase.from('tracking').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('content_type', 'anime').eq('status', 'completed'),
+      supabase.from('tracking').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('content_type', 'manga').eq('status', 'completed'),
+      supabase.from('tracking').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('content_type', 'game'),
     ])
+
     setProfile(profileData)
     setTaste(tasteData)
     setSteamConnected((steamData?.length ?? 0) > 0)
+    setAnilistConnected((anilistData?.length ?? 0) > 0)
+    setAnimeCount(animeC ?? 0)
+    setMangaCount(mangaC ?? 0)
+    setGamesCount(gamesC ?? 0)
     setIsLoading(false)
   }
-
-  useFocusEffect(
-    useCallback(() => {
-      if (!user) return
-      loadProfile()
-    }, [user])
-  )
 
   if (isLoading) {
     return (
@@ -175,9 +195,9 @@ export default function ProfileScreen() {
         {/* Stats */}
         <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            <StatCard value={0} label="Anime Watched" color="#6C5CE7" />
-            <StatCard value={0} label="Manga Read" color="#00D1FF" />
-            <StatCard value={0} label="Games Played" color="#2EE59D" />
+            <StatCard value={animeCount} label="Anime Watched" color="#6C5CE7" />
+            <StatCard value={mangaCount} label="Manga Read" color="#00D1FF" />
+            <StatCard value={gamesCount} label="Games Played" color="#2EE59D" />
           </View>
         </View>
 
@@ -195,7 +215,9 @@ export default function ProfileScreen() {
         <View style={{ paddingHorizontal: 20, marginTop: 28 }}>
           <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 16 }}>Connections</Text>
           <View style={{ gap: 10 }}>
-            <ConnectionCard name="AniList" logo={<AniListLogo size={40} />} connected={false} />
+            <TouchableOpacity onPress={() => router.push('/(app)/connect-anilist' as any)}>
+              <ConnectionCard name="AniList" logo={<AniListLogo size={40} />} connected={anilistConnected} />
+            </TouchableOpacity>
             <ConnectionCard name="MyAnimeList" logo={<MyAnimeListLogo size={40} />} connected={false} />
             <TouchableOpacity onPress={() => router.push('/(app)/connect-steam' as any)}>
               <ConnectionCard name="Steam" logo={<SteamLogo size={40} />} connected={steamConnected} />

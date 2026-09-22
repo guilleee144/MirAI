@@ -4,12 +4,12 @@
     "slug": "MirAI",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/icon.png",
     "scheme": "mirai",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0B0F17",
     "splash": {
-      "image": "./assets/images/splash.png",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#0B0F17"
     },
@@ -28,7 +28,7 @@
     "android": {
       "package": "com.mirai.app",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#0B0F17"
       }
     },
@@ -48,15 +48,19 @@
         }
       ],
       "expo-asset",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-image",
+      "expo-status-bar"
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": false
     },
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
+        "projectId": "405e9988-e315-470f-9e82-cf3f43197fe9"
       }
-    }
+    },
+    "owner": "guilleee144"
   }
 }

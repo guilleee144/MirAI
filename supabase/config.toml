@@ -9,3 +9,11 @@ entrypoint = "./functions/steam-library/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/steam-library/*.html" ]
+
+# The chat function validates the caller's JWT itself (auth.getUser), so the
+# gateway check stays off — this avoids "Invalid JWT" issues with newer
+# asymmetric Supabase JWT keys while still rejecting unauthenticated calls.
+[functions.chat]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/chat/index.ts"

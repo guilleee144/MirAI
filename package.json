@@ -29,6 +29,7 @@
     "react-native-screens": "^4.28.0",
     "react-native-svg": "^15.15.5",
     "react-native-url-polyfill": "^4.0.0",
+    "react-native-video": "^6.19.3",
     "zod": "^3.25.76",
     "zustand": "^5.0.15"
   },

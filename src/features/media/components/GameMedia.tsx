@@ -1,8 +1,9 @@
 // src/features/media/components/GameMedia.tsx
 // Trailer + screenshot gallery for a game. Tapping a screenshot opens a full-screen,
-// swipeable viewer; the trailer opens in the phone's video player.
+// swipeable viewer; the trailer plays in an in-app player.
 import { useRef, useState } from 'react'
-import { View, Text, ScrollView, TouchableOpacity, Image, Modal, FlatList, Linking, Dimensions, StatusBar } from 'react-native'
+import { View, Text, ScrollView, TouchableOpacity, Image, Modal, FlatList, Dimensions, StatusBar } from 'react-native'
+import { TrailerPlayer } from '@/features/media/components/TrailerPlayer'
 import type { StoreScreenshot, StoreTrailer } from '@/services/steamStore'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -10,6 +11,7 @@ const THUMB_WIDTH = 240
 const THUMB_HEIGHT = 135
 
 interface GameMediaProps {
+  gameId: number
   trailer: StoreTrailer | null
   screenshots: StoreScreenshot[]
 }
@@ -55,21 +57,11 @@ function ScreenshotViewer({ screenshots, startIndex, onClose }: { screenshots: S
   )
 }
 
-export function GameMedia({ trailer, screenshots }: GameMediaProps) {
+export function GameMedia({ gameId, trailer, screenshots }: GameMediaProps) {
   const [viewerIndex, setViewerIndex] = useState<number | null>(null)
-  const [trailerFailed, setTrailerFailed] = useState(false)
+  const [isTrailerOpen, setIsTrailerOpen] = useState(false)
 
   if (!trailer && screenshots.length === 0) return null
-
-  const playTrailer = async () => {
-    if (!trailer) return
-    try {
-      await Linking.openURL(trailer.videoUrl)
-      setTrailerFailed(false)
-    } catch {
-      setTrailerFailed(true)
-    }
-  }
 
   return (
     <View style={{ marginBottom: 24 }}>
@@ -77,7 +69,7 @@ export function GameMedia({ trailer, screenshots }: GameMediaProps) {
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 20 }} style={{ marginHorizontal: -20 }}>
         {trailer && (
-          <TouchableOpacity activeOpacity={0.85} onPress={playTrailer}>
+          <TouchableOpacity activeOpacity={0.85} onPress={() => setIsTrailerOpen(true)}>
             <View style={{ width: THUMB_WIDTH, height: THUMB_HEIGHT, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', backgroundColor: '#1B2133' }}>
               <Image source={{ uri: trailer.thumbnail }} style={{ width: THUMB_WIDTH, height: THUMB_HEIGHT }} resizeMode="cover" />
               <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(11,15,23,0.35)' }}>
@@ -103,7 +95,9 @@ export function GameMedia({ trailer, screenshots }: GameMediaProps) {
         ))}
       </ScrollView>
 
-      {trailerFailed && <Text style={{ color: '#FF6B6B', fontSize: 12, marginTop: 8 }}>Couldn't open the trailer on this device.</Text>}
+      {isTrailerOpen && trailer && (
+        <TrailerPlayer trailer={trailer} fallbackUrl={`https://store.steampowered.com/app/${gameId}`} onClose={() => setIsTrailerOpen(false)} />
+      )}
 
       {viewerIndex !== null && <ScreenshotViewer screenshots={screenshots} startIndex={viewerIndex} onClose={() => setViewerIndex(null)} />}
     </View>

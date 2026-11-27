@@ -217,7 +217,7 @@ export function GameDetailScreen({ route, navigation }: Props) {
             <Text style={{ color: '#FF6B6B', fontSize: 12, marginTop: -14, marginBottom: 16 }}>Couldn't add it, try again.</Text>
           )}
 
-          <GameMedia trailer={game.trailer} screenshots={game.screenshots} />
+          <GameMedia gameId={game.id} trailer={game.trailer} screenshots={game.screenshots} />
 
           {game.genres.length > 0 && (
             <View style={{ marginBottom: 24 }}>

@@ -34,6 +34,8 @@ export interface StoreScreenshot {
 export interface StoreTrailer {
   thumbnail: string
   videoUrl: string
+  /** Stream format, needed by the native player to pick the right decoder. */
+  videoType: 'm3u8' | 'mpd' | 'mp4'
 }
 
 export interface StoreGameDetail {
@@ -245,18 +247,32 @@ interface RawAppDetails {
   metacritic?: { score?: number }
   price_overview?: { final?: number; currency?: string; discount_percent?: number }
   screenshots?: { path_thumbnail?: string; path_full?: string }[]
-  movies?: { thumbnail?: string; webm?: Record<string, string>; mp4?: Record<string, string> }[]
+  movies?: {
+    thumbnail?: string
+    hls_h264?: string
+    dash_h264?: string
+    // Older responses used direct files instead of streams.
+    mp4?: Record<string, string>
+    webm?: Record<string, string>
+  }[]
 }
 
 function toHttps(url: string): string {
   return url.replace(/^http:\/\//, 'https://')
 }
 
-/** First trailer with a playable file. Prefers the lighter 480p version for mobile data. */
+/**
+ * First trailer we can play. Steam now serves trailers as HLS / DASH streams (the player
+ * adapts quality to the connection); direct mp4 files are kept as a fallback for old data.
+ */
 function pickTrailer(movies: RawAppDetails['movies']): StoreTrailer | null {
   for (const movie of movies ?? []) {
-    const videoUrl = movie.mp4?.['480'] ?? movie.mp4?.max ?? movie.webm?.['480'] ?? movie.webm?.max
-    if (videoUrl && movie.thumbnail) return { thumbnail: toHttps(movie.thumbnail), videoUrl: toHttps(videoUrl) }
+    if (!movie.thumbnail) continue
+    const thumbnail = toHttps(movie.thumbnail)
+    if (movie.hls_h264) return { thumbnail, videoUrl: toHttps(movie.hls_h264), videoType: 'm3u8' }
+    if (movie.dash_h264) return { thumbnail, videoUrl: toHttps(movie.dash_h264), videoType: 'mpd' }
+    const file = movie.mp4?.['480'] ?? movie.mp4?.max
+    if (file) return { thumbnail, videoUrl: toHttps(file), videoType: 'mp4' }
   }
   return null
 }

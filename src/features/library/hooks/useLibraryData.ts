@@ -1,7 +1,7 @@
 // src/features/library/hooks/useLibraryData.ts
-// Loads the user's library and keeps it fresh: whenever the screen is focused it
-// shows what is stored, then (at most every 15 min, or on pull-to-refresh) re-syncs
-// the linked Steam / AniList accounts in the background and reloads.
+// Loads the user's library and keeps it fresh: whenever the screen is focused it loads
+// what is stored AND (at most every 15 min, or on pull-to-refresh) re-syncs the linked
+// Steam / AniList accounts at the same time, then reloads once with the new data.
 import { useCallback, useRef, useState } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { useAuth } from '@/providers/AuthProvider'
@@ -29,7 +29,9 @@ export function useLibraryData() {
       .from('tracking')
       .select('*')
       .eq('user_id', userId)
-      .order('updated_at', { ascending: false })
+      // Stable order: updated_at changes on every sync, which made the grid jump around.
+      .order('created_at', { ascending: false })
+      .order('title', { ascending: true })
     setItems(data ?? [])
     setIsLoading(false)
   }, [userId])
@@ -54,10 +56,11 @@ export function useLibraryData() {
     [userId, load]
   )
 
-  // Show stored data first (no spinner on re-focus), then refresh in the background.
+  // Stored data and the background sync start together: nothing waits for the other.
   useFocusEffect(
     useCallback(() => {
-      load().then(() => sync())
+      load()
+      sync()
     }, [load, sync])
   )
 

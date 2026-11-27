@@ -74,12 +74,14 @@ export function LibraryScreen() {
         <View style={{ paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text style={{ color: '#fff', fontSize: 28, fontWeight: '800', letterSpacing: -1 }}>My Library</Text>
-            {isSyncing && !isPullRefreshing && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <ActivityIndicator size="small" color="#6C5CE7" />
-                <Text style={{ color: '#7B8496', fontSize: 12 }}>Syncing</Text>
-              </View>
-            )}
+            {/* Always rendered (only its opacity changes) so showing it never moves the layout. */}
+            <View
+              pointerEvents="none"
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, width: 80, opacity: isSyncing && !isPullRefreshing ? 1 : 0 }}
+            >
+              <ActivityIndicator size="small" color="#6C5CE7" />
+              <Text style={{ color: '#7B8496', fontSize: 12 }}>Syncing</Text>
+            </View>
           </View>
           <Text style={{ color: '#7B8496', fontSize: 14, marginTop: 4 }}>
             {isGames ? 'Your games, synced with Steam' : 'Your lists, synced with AniList'}

@@ -19,6 +19,8 @@ export interface SteamGame {
   achievements?: { total: number; unlocked: number } | null
   /** true = online/multiplayer-only game with no ending. null = unknown. */
   is_multiplayer_only?: boolean | null
+  /** Store genres (Action, RPG...). Only present for the most played games. */
+  genres?: string[] | null
 }
 
 export interface SteamLibraryResponse {

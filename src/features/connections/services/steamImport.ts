@@ -29,6 +29,7 @@ function toTrackingRow(userId: string, game: SteamGame): TrackingInsert {
       playtime_2weeks: game.playtime_2weeks_hours,
       achievements: game.achievements ?? null,
       is_multiplayer_only: game.is_multiplayer_only ?? null,
+      genres: game.genres ?? null,
       source: 'steam',
     },
   }

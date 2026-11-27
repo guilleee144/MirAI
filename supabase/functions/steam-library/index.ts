@@ -30,26 +30,37 @@ async function fetchAchievements(apiKey: string, steamId: string, appid: number)
   }
 }
 
-// true when the game is online/multiplayer with no single-player mode (Apex, MMOs, PvP...),
-// i.e. a game that has no ending. null = could not be determined.
-async function fetchIsMultiplayerOnly(appid: number): Promise<boolean | null> {
+type StoreInfo = {
+  /** true = online/multiplayer-only game with no ending (Apex, MMOs, PvP...). null = unknown. */
+  isMultiplayerOnly: boolean | null
+  /** Store genres (Action, RPG...). null = unknown. */
+  genres: string[] | null
+}
+
+// One store request gives both the game's categories and its genres.
+async function fetchStoreInfo(appid: number): Promise<StoreInfo> {
+  const unknown: StoreInfo = { isMultiplayerOnly: null, genres: null }
   try {
-    const url = `https://store.steampowered.com/api/appdetails?appids=${appid}&filters=categories&l=english`
+    const url = `https://store.steampowered.com/api/appdetails?appids=${appid}&l=english&cc=us`
     const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
-    if (!res.ok) return null
+    if (!res.ok) return unknown
     const data = await res.json() as Record<string, {
       success: boolean
-      data?: { categories?: { description: string }[] }
+      data?: { categories?: { description: string }[]; genres?: { description: string }[] }
     }>
     const entry = data[String(appid)]
-    const categories = entry?.success ? entry.data?.categories : undefined
-    if (!categories) return null
+    if (!entry?.success || !entry.data) return unknown
+
+    const genres = entry.data.genres?.map((g) => g.description) ?? null
+    const categories = entry.data.categories
+    if (!categories) return { isMultiplayerOnly: null, genres }
+
     const names = categories.map((c) => c.description)
     const hasSinglePlayer = names.some((n) => /^single-player$/i.test(n))
     const hasMultiplayer = names.some((n) => /multi-player|pvp|mmo|co-op/i.test(n))
-    return hasMultiplayer && !hasSinglePlayer
+    return { isMultiplayerOnly: hasMultiplayer && !hasSinglePlayer, genres }
   } catch {
-    return null
+    return unknown
   }
 }
 
@@ -136,11 +147,11 @@ serve(async (req) => {
       games.map(async (game, index) => {
         // The app imports the top games plus anything played in the last 2 weeks.
         if (index >= ENRICH_LIMIT && game.playtime_2weeks_hours === 0) return game
-        const [achievements, isMultiplayerOnly] = await Promise.all([
+        const [achievements, storeInfo] = await Promise.all([
           fetchAchievements(STEAM_API_KEY, steamId, game.appid),
-          fetchIsMultiplayerOnly(game.appid),
+          fetchStoreInfo(game.appid),
         ])
-        return { ...game, achievements, is_multiplayer_only: isMultiplayerOnly }
+        return { ...game, achievements, is_multiplayer_only: storeInfo.isMultiplayerOnly, genres: storeInfo.genres }
       })
     )
 

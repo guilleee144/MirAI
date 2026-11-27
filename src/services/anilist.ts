@@ -288,6 +288,7 @@ export interface AniListListEntry {
     id: number
     title: { romaji: string; english: string | null }
     coverImage: { large: string | null }
+    genres: string[]
   }
 }
 
@@ -354,6 +355,7 @@ export async function getUserMediaList(userName: string, type: 'ANIME' | 'MANGA'
               id
               title { romaji english }
               coverImage { large }
+              genres
             }
           }
         }

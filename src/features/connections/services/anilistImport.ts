@@ -35,7 +35,7 @@ function toTrackingRow(
     progress: entry.progress,
     // AniList uses 0 for "not rated". Rounded: the column may be an integer.
     rating: entry.score > 0 ? Math.round(entry.score) : null,
-    metadata: { source: 'anilist', anilist_username: anilistUsername },
+    metadata: { source: 'anilist', anilist_username: anilistUsername, genres: entry.media.genres ?? [] },
   }
 }
 

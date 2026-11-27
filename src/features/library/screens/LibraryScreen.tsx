@@ -1,203 +1,156 @@
 // src/features/library/screens/LibraryScreen.tsx
-// Migrated from app/(app)/library/index.tsx.
-// useFocusEffect from expo-router -> same name/signature from
-// @react-navigation/native, a genuine drop-in replacement.
-import { useState, useCallback } from 'react'
-import { View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native'
+// Anime, manga and games live in separate sections: stats, statuses and wording
+// all belong to the selected section, nothing is mixed.
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native'
 import LinearGradient from 'react-native-linear-gradient'
-import { useFocusEffect, useNavigation } from '@react-navigation/native'
-import { useAuth } from '@/providers/AuthProvider'
-import { supabase } from '@/services/supabase'
-import type { Database } from '@/types/supabase'
-
-type TrackingItem = Database['public']['Tables']['tracking']['Row']
-type ContentType = 'all' | 'anime' | 'manga' | 'game'
-type StatusFilter = 'all' | 'watching' | 'completed' | 'plan_to_watch' | 'on_hold' | 'dropped'
-
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  watching: { label: 'Watching', color: '#00D1FF' },
-  completed: { label: 'Completed', color: '#2EE59D' },
-  plan_to_watch: { label: 'Plan to watch', color: '#7B8496' },
-  on_hold: { label: 'On hold', color: '#FFB347' },
-  dropped: { label: 'Dropped', color: '#FF6B6B' },
-}
-
-const CONTENT_TABS: { id: ContentType; label: string; emoji: string }[] = [
-  { id: 'all', label: 'All', emoji: '◈' },
-  { id: 'anime', label: 'Anime', emoji: '▶' },
-  { id: 'manga', label: 'Manga', emoji: '📖' },
-  { id: 'game', label: 'Games', emoji: '🎮' },
-]
-
-const STATUS_TABS: { id: StatusFilter; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'watching', label: 'Watching' },
-  { id: 'completed', label: 'Done' },
-  { id: 'plan_to_watch', label: 'Planning' },
-  { id: 'on_hold', label: 'On Hold' },
-  { id: 'dropped', label: 'Dropped' },
-]
-
-function LibraryCard({ item, onPress }: { item: TrackingItem; onPress: () => void }) {
-  const status = STATUS_LABELS[item.status ?? 'plan_to_watch']
-  const metadata = item.metadata as Record<string, any> | null
-
-  return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={{ flex: 1, margin: 6 }}>
-      <View style={{ borderRadius: 14, overflow: 'hidden', backgroundColor: '#141826', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
-        {item.cover_image ? (
-          <Image
-            source={{ uri: item.cover_image }}
-            style={{ width: '100%', aspectRatio: item.content_type === 'game' ? 16 / 9 : 2 / 3 }}
-            resizeMode="cover"
-          />
-        ) : (
-          <LinearGradient
-            colors={['#1B2133', '#0B0F17']}
-            style={{ width: '100%', aspectRatio: item.content_type === 'game' ? 16 / 9 : 2 / 3 }}
-          />
-        )}
-        <View style={{ padding: 8 }}>
-          <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600', marginBottom: 4 }} numberOfLines={2}>
-            {item.title}
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View style={{ backgroundColor: `${status.color}20`, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-              <Text style={{ color: status.color, fontSize: 9, fontWeight: '600' }}>{status.label}</Text>
-            </View>
-            {item.content_type === 'game' && metadata?.playtime_hours > 0 && (
-              <Text style={{ color: '#7B8496', fontSize: 9 }}>{metadata.playtime_hours}h</Text>
-            )}
-            {item.rating && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                <Text style={{ color: '#FFB347', fontSize: 9 }}>★</Text>
-                <Text style={{ color: '#7B8496', fontSize: 9 }}>{item.rating}</Text>
-              </View>
-            )}
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
-  )
-}
+import { useNavigation } from '@react-navigation/native'
+import { EMPTY_STATES, getStatusLabel, LIBRARY_TABS, STATUS_FILTER_ORDER, type LibraryType, type StatusFilter } from '../constants'
+import { getLibraryStats, getPlaytimeHours, type TrackingItem } from '../libraryStats'
+import { useLibraryData } from '../hooks/useLibraryData'
+import { LibraryCard } from '../components/LibraryCard'
 
 export function LibraryScreen() {
-  const { user } = useAuth()
   const navigation = useNavigation()
-  const [items, setItems] = useState<TrackingItem[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [activeType, setActiveType] = useState<ContentType>('all')
+  const { items, isLoading, isSyncing, refresh } = useLibraryData()
+  const [activeType, setActiveType] = useState<LibraryType>('anime')
   const [activeStatus, setActiveStatus] = useState<StatusFilter>('all')
+  const [isPullRefreshing, setIsPullRefreshing] = useState(false)
 
-  const loadLibrary = useCallback(async () => {
-    if (!user) return
-    setIsLoading(true)
+  const itemsByType = useMemo(() => {
+    const grouped: Record<LibraryType, TrackingItem[]> = { anime: [], manga: [], game: [] }
+    for (const item of items) grouped[item.content_type].push(item)
+    grouped.game.sort((a, b) => getPlaytimeHours(b) - getPlaytimeHours(a))
+    return grouped
+  }, [items])
 
-    const { data } = await supabase
-      .from('tracking')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('updated_at', { ascending: false })
+  // First load only: if there is no anime, open on the first section that has something.
+  const didAutoSelect = useRef(false)
+  useEffect(() => {
+    if (isLoading || didAutoSelect.current) return
+    didAutoSelect.current = true
+    if (itemsByType.anime.length === 0) {
+      const firstWithItems = LIBRARY_TABS.find((tab) => itemsByType[tab.id].length > 0)
+      if (firstWithItems) setActiveType(firstWithItems.id)
+    }
+  }, [isLoading, itemsByType])
 
-    setItems(data ?? [])
-    setIsLoading(false)
-  }, [user])
+  const sectionItems = itemsByType[activeType]
+  const visibleItems = activeStatus === 'all' ? sectionItems : sectionItems.filter((i) => i.status === activeStatus)
+  const stats = getLibraryStats(sectionItems, activeType)
+  const isGames = activeType === 'game'
+  const emptyState = EMPTY_STATES[activeType]
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!user) return
-      loadLibrary()
-    }, [user, loadLibrary])
-  )
+  const selectType = (type: LibraryType) => {
+    setActiveType(type)
+    setActiveStatus('all')
+  }
 
-  const filtered = items.filter((item) => {
-    const typeMatch = activeType === 'all' || item.content_type === activeType
-    const statusMatch = activeStatus === 'all' || item.status === activeStatus
-    return typeMatch && statusMatch
-  })
+  const handlePullRefresh = async () => {
+    setIsPullRefreshing(true)
+    await refresh()
+    setIsPullRefreshing(false)
+  }
 
-  const stats = {
-    anime: items.filter((i) => i.content_type === 'anime').length,
-    manga: items.filter((i) => i.content_type === 'manga').length,
-    games: items.filter((i) => i.content_type === 'game').length,
-    completed: items.filter((i) => i.status === 'completed').length,
+  const openItem = (item: TrackingItem) => {
+    if (item.content_type === 'game') return
+    navigation.navigate('MediaDetail' as never, { id: item.external_id, type: item.content_type.toUpperCase() } as never)
   }
 
   return (
     <View style={{ flex: 1, backgroundColor: '#0B0F17' }}>
       <LinearGradient
         colors={['rgba(108,92,231,0.1)', 'transparent']}
+        pointerEvents="none"
         style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 200 }}
       />
 
-      <ScrollView showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        stickyHeaderIndices={[1]}
+        refreshControl={<RefreshControl refreshing={isPullRefreshing} onRefresh={handlePullRefresh} tintColor="#6C5CE7" colors={['#6C5CE7']} />}
+      >
+        {/* Title + stats of the selected section */}
         <View style={{ paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 }}>
-          <Text style={{ color: '#fff', fontSize: 28, fontWeight: '800', letterSpacing: -1 }}>My Library</Text>
-          <Text style={{ color: '#7B8496', fontSize: 14, marginTop: 4 }}>Your anime, manga & gaming collection</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={{ color: '#fff', fontSize: 28, fontWeight: '800', letterSpacing: -1 }}>My Library</Text>
+            {isSyncing && !isPullRefreshing && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <ActivityIndicator size="small" color="#6C5CE7" />
+                <Text style={{ color: '#7B8496', fontSize: 12 }}>Syncing</Text>
+              </View>
+            )}
+          </View>
+          <Text style={{ color: '#7B8496', fontSize: 14, marginTop: 4 }}>
+            {isGames ? 'Your games, synced with Steam' : 'Your lists, synced with AniList'}
+          </Text>
 
           <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
-            {[
-              { label: 'Anime', value: stats.anime, color: '#6C5CE7' },
-              { label: 'Manga', value: stats.manga, color: '#00D1FF' },
-              { label: 'Games', value: stats.games, color: '#2EE59D' },
-              { label: 'Completed', value: stats.completed, color: '#FFB347' },
-            ].map((stat) => (
+            {stats.map((stat) => (
               <View
                 key={stat.label}
                 style={{ flex: 1, backgroundColor: '#141826', borderRadius: 12, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}
               >
                 <Text style={{ color: stat.color, fontSize: 18, fontWeight: '800' }}>{stat.value}</Text>
-                <Text style={{ color: '#7B8496', fontSize: 10, marginTop: 2 }}>{stat.label}</Text>
+                <Text style={{ color: '#7B8496', fontSize: 10, marginTop: 2 }} numberOfLines={1}>
+                  {stat.label}
+                </Text>
               </View>
             ))}
           </View>
         </View>
 
+        {/* Sticky: section tabs + status filters */}
         <View style={{ backgroundColor: '#0B0F17', paddingBottom: 8 }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 8, paddingBottom: 8 }}>
-            {CONTENT_TABS.map((tab) => (
-              <TouchableOpacity key={tab.id} onPress={() => setActiveType(tab.id)} activeOpacity={0.8}>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    paddingHorizontal: 14,
-                    paddingVertical: 8,
-                    borderRadius: 100,
-                    backgroundColor: activeType === tab.id ? '#6C5CE7' : '#141826',
-                    borderWidth: 1,
-                    borderColor: activeType === tab.id ? '#6C5CE7' : 'rgba(255,255,255,0.06)',
-                  }}
-                >
-                  <Text style={{ fontSize: 12 }}>{tab.emoji}</Text>
-                  <Text style={{ color: activeType === tab.id ? '#fff' : '#7B8496', fontSize: 13, fontWeight: activeType === tab.id ? '600' : '400' }}>
-                    {tab.label}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          <View style={{ flexDirection: 'row', paddingHorizontal: 20, gap: 8, paddingBottom: 10 }}>
+            {LIBRARY_TABS.map((tab) => {
+              const active = activeType === tab.id
+              return (
+                <TouchableOpacity key={tab.id} onPress={() => selectType(tab.id)} activeOpacity={0.8} style={{ flex: 1 }}>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      paddingVertical: 9,
+                      borderRadius: 100,
+                      backgroundColor: active ? '#6C5CE7' : '#141826',
+                      borderWidth: 1,
+                      borderColor: active ? '#6C5CE7' : 'rgba(255,255,255,0.06)',
+                    }}
+                  >
+                    <Text style={{ fontSize: 12 }}>{tab.icon}</Text>
+                    <Text style={{ color: active ? '#fff' : '#7B8496', fontSize: 13, fontWeight: active ? '600' : '400' }}>{tab.label}</Text>
+                    <Text style={{ color: active ? 'rgba(255,255,255,0.7)' : '#4F586B', fontSize: 11 }}>{itemsByType[tab.id].length}</Text>
+                  </View>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 6 }}>
-            {STATUS_TABS.map((tab) => (
-              <TouchableOpacity key={tab.id} onPress={() => setActiveStatus(tab.id)} activeOpacity={0.8}>
-                <View
-                  style={{
-                    paddingHorizontal: 12,
-                    paddingVertical: 5,
-                    borderRadius: 100,
-                    backgroundColor: activeStatus === tab.id ? 'rgba(108,92,231,0.2)' : 'transparent',
-                    borderWidth: 1,
-                    borderColor: activeStatus === tab.id ? 'rgba(108,92,231,0.5)' : 'rgba(255,255,255,0.06)',
-                  }}
-                >
-                  <Text style={{ color: activeStatus === tab.id ? '#8B7FF0' : '#7B8496', fontSize: 12, fontWeight: activeStatus === tab.id ? '600' : '400' }}>
-                    {tab.label}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+            {(['all', ...STATUS_FILTER_ORDER] as StatusFilter[]).map((status) => {
+              const active = activeStatus === status
+              return (
+                <TouchableOpacity key={status} onPress={() => setActiveStatus(status)} activeOpacity={0.8}>
+                  <View
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 5,
+                      borderRadius: 100,
+                      backgroundColor: active ? 'rgba(108,92,231,0.2)' : 'transparent',
+                      borderWidth: 1,
+                      borderColor: active ? 'rgba(108,92,231,0.5)' : 'rgba(255,255,255,0.06)',
+                    }}
+                  >
+                    <Text style={{ color: active ? '#8B7FF0' : '#7B8496', fontSize: 12, fontWeight: active ? '600' : '400' }}>
+                      {status === 'all' ? 'All' : getStatusLabel(activeType, status)}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )
+            })}
           </ScrollView>
         </View>
 
@@ -205,51 +158,40 @@ export function LibraryScreen() {
           <View style={{ height: 300, alignItems: 'center', justifyContent: 'center' }}>
             <ActivityIndicator color="#6C5CE7" size="large" />
           </View>
-        ) : filtered.length === 0 ? (
+        ) : sectionItems.length === 0 ? (
           <View style={{ paddingHorizontal: 20, paddingTop: 60, alignItems: 'center' }}>
-            <Text style={{ fontSize: 40, marginBottom: 16 }}>
-              {activeType === 'game' ? '🎮' : activeType === 'manga' ? '📖' : activeType === 'anime' ? '▶' : '◈'}
-            </Text>
-            <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 8, textAlign: 'center' }}>
-              Nothing here yet
-            </Text>
-            <Text style={{ color: '#7B8496', fontSize: 14, textAlign: 'center', lineHeight: 20 }}>
-              {activeType === 'game' ? 'Connect your Steam account to import your games' : 'Start discovering and adding content to your library'}
-            </Text>
+            <Text style={{ fontSize: 40, marginBottom: 16 }}>{emptyState.emoji}</Text>
+            <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 8, textAlign: 'center' }}>{emptyState.title}</Text>
+            <Text style={{ color: '#7B8496', fontSize: 14, textAlign: 'center', lineHeight: 20 }}>{emptyState.description}</Text>
             <TouchableOpacity
-              onPress={() =>
-                activeType === 'game'
-                  ? navigation.navigate('ConnectSteam' as never)
-                  : navigation.navigate('Discover' as never)
-              }
+              onPress={() => navigation.navigate((emptyState.action === 'connect-steam' ? 'ConnectSteam' : 'ConnectAniList') as never)}
               style={{ marginTop: 20 }}
             >
               <LinearGradient colors={['#6C5CE7', '#8B7FF0']} style={{ borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}>
                 <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>
-                  {activeType === 'game' ? 'Connect Steam' : 'Discover content'}
+                  {emptyState.action === 'connect-steam' ? 'Connect Steam' : 'Connect AniList'}
                 </Text>
               </LinearGradient>
             </TouchableOpacity>
+            {!isGames && (
+              <TouchableOpacity onPress={() => navigation.navigate('Discover' as never)} style={{ marginTop: 14 }}>
+                <Text style={{ color: '#6C5CE7', fontSize: 14, fontWeight: '600' }}>Discover content →</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : visibleItems.length === 0 ? (
+          <View style={{ paddingTop: 60, alignItems: 'center' }}>
+            <Text style={{ color: '#7B8496', fontSize: 14 }}>Nothing with this status</Text>
           </View>
         ) : (
           <View style={{ paddingHorizontal: 14, paddingTop: 8 }}>
             <Text style={{ color: '#7B8496', fontSize: 12, paddingHorizontal: 6, marginBottom: 8 }}>
-              {filtered.length} {filtered.length === 1 ? 'item' : 'items'}
+              {visibleItems.length} {visibleItems.length === 1 ? 'item' : 'items'}
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-              {filtered.map((item) => (
-                <View key={item.id} style={{ width: '33.33%' }}>
-                  <LibraryCard
-                    item={item}
-                    onPress={() => {
-                      if (item.content_type !== 'game') {
-                        navigation.navigate('MediaDetail' as never, {
-                          id: item.external_id,
-                          type: item.content_type.toUpperCase(),
-                        } as never)
-                      }
-                    }}
-                  />
+              {visibleItems.map((item) => (
+                <View key={item.id} style={{ width: isGames ? '50%' : '33.33%' }}>
+                  <LibraryCard item={item} onPress={() => openItem(item)} />
                 </View>
               ))}
             </View>

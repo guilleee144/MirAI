@@ -15,6 +15,10 @@ export interface SteamGame {
   playtime_2weeks_hours: number
   cover_url: string
   icon_url: string | null
+  /** Only present for the most played games. null = unknown / game has no achievements. */
+  achievements?: { total: number; unlocked: number } | null
+  /** true = online/multiplayer-only game with no ending. null = unknown. */
+  is_multiplayer_only?: boolean | null
 }
 
 export interface SteamLibraryResponse {
@@ -47,4 +51,25 @@ export function parseSteamInput(input: string): string {
 
   // Return as-is if vanity URL — we'll need to resolve it separately
   return trimmed
+}
+
+export type SteamTrackingStatus = 'completed' | 'watching' | 'on_hold' | 'plan_to_watch'
+
+/**
+ * Library status for a Steam game.
+ * - Never played            -> plan_to_watch (shown as "Backlog")
+ * - 100% achievements       -> completed (unless it is a multiplayer-only game)
+ * - Otherwise               -> watching ("Playing") if played in the last 2 weeks,
+ *                              on_hold ("Paused") if not
+ * A game is never "completed" just because it has playtime.
+ */
+export function getSteamTrackingStatus(game: SteamGame): SteamTrackingStatus {
+  const played = game.playtime_hours > 0 || game.playtime_2weeks_hours > 0
+  if (!played) return 'plan_to_watch'
+
+  const hasAllAchievements =
+    !!game.achievements && game.achievements.total > 0 && game.achievements.unlocked === game.achievements.total
+  if (hasAllAchievements && !game.is_multiplayer_only) return 'completed'
+
+  return game.playtime_2weeks_hours > 0 ? 'watching' : 'on_hold'
 }

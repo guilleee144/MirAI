@@ -114,6 +114,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          anilist_username: string | null
           avatar_url: string | null
           bio: string | null
           created_at: string | null
@@ -122,11 +123,13 @@ export type Database = {
           id: string
           is_onboarded: boolean | null
           level: number | null
+          steam_id: string | null
           updated_at: string | null
           username: string
           xp: number | null
         }
         Insert: {
+          anilist_username?: string | null
           avatar_url?: string | null
           bio?: string | null
           created_at?: string | null
@@ -135,11 +138,13 @@ export type Database = {
           id: string
           is_onboarded?: boolean | null
           level?: number | null
+          steam_id?: string | null
           updated_at?: string | null
           username: string
           xp?: number | null
         }
         Update: {
+          anilist_username?: string | null
           avatar_url?: string | null
           bio?: string | null
           created_at?: string | null
@@ -148,6 +153,7 @@ export type Database = {
           id?: string
           is_onboarded?: boolean | null
           level?: number | null
+          steam_id?: string | null
           updated_at?: string | null
           username?: string
           xp?: number | null

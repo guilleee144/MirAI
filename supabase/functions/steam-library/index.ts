@@ -6,6 +6,53 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Only the top games are enriched (one extra request each). Keep this in sync
+// with the number of games the app imports.
+const ENRICH_LIMIT = 20
+const REQUEST_TIMEOUT_MS = 6000
+
+type Achievements = { total: number; unlocked: number }
+
+// Needs the player's "game details" to be public. null = unknown / no achievements.
+async function fetchAchievements(apiKey: string, steamId: string, appid: number): Promise<Achievements | null> {
+  try {
+    const url = `https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v0001/?appid=${appid}&key=${apiKey}&steamid=${steamId}`
+    const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
+    if (!res.ok) return null
+    const data = await res.json() as {
+      playerstats?: { success?: boolean; achievements?: { achieved: number }[] }
+    }
+    const list = data.playerstats?.achievements
+    if (!data.playerstats?.success || !list || list.length === 0) return null
+    return { total: list.length, unlocked: list.filter((a) => a.achieved === 1).length }
+  } catch {
+    return null
+  }
+}
+
+// true when the game is online/multiplayer with no single-player mode (Apex, MMOs, PvP...),
+// i.e. a game that has no ending. null = could not be determined.
+async function fetchIsMultiplayerOnly(appid: number): Promise<boolean | null> {
+  try {
+    const url = `https://store.steampowered.com/api/appdetails?appids=${appid}&filters=categories&l=english`
+    const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
+    if (!res.ok) return null
+    const data = await res.json() as Record<string, {
+      success: boolean
+      data?: { categories?: { description: string }[] }
+    }>
+    const entry = data[String(appid)]
+    const categories = entry?.success ? entry.data?.categories : undefined
+    if (!categories) return null
+    const names = categories.map((c) => c.description)
+    const hasSinglePlayer = names.some((n) => /^single-player$/i.test(n))
+    const hasMultiplayer = names.some((n) => /multi-player|pvp|mmo|co-op/i.test(n))
+    return hasMultiplayer && !hasSinglePlayer
+  } catch {
+    return null
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -85,6 +132,18 @@ serve(async (req) => {
           : null,
       }))
 
+    const enrichedGames = await Promise.all(
+      games.map(async (game, index) => {
+        // The app imports the top games plus anything played in the last 2 weeks.
+        if (index >= ENRICH_LIMIT && game.playtime_2weeks_hours === 0) return game
+        const [achievements, isMultiplayerOnly] = await Promise.all([
+          fetchAchievements(STEAM_API_KEY, steamId, game.appid),
+          fetchIsMultiplayerOnly(game.appid),
+        ])
+        return { ...game, achievements, is_multiplayer_only: isMultiplayerOnly }
+      })
+    )
+
     return new Response(
       JSON.stringify({
         profile: player ? {
@@ -94,7 +153,7 @@ serve(async (req) => {
           profile_url: player.profileurl,
         } : null,
         game_count: gamesData.response.game_count,
-        games,
+        games: enrichedGames,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

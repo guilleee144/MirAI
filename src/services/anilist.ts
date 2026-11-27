@@ -3,7 +3,7 @@
 
 const ANILIST_API = 'https://graphql.anilist.co'
 
-async function anilistQuery<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+export async function anilistQuery<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
   const response = await fetch(ANILIST_API, {
     method: 'POST',
     headers: {
@@ -263,4 +263,116 @@ export function formatScore(score: number | null): string {
 // Helper: get display title
 export function getTitle(media: AniListMedia): string {
   return media.title.english ?? media.title.romaji
+}
+
+// ─── User lists (public, no auth) ────────────────────────────
+
+export interface AniListUser {
+  id: number
+  name: string
+  avatar: { large: string | null }
+  statistics: {
+    anime: { count: number }
+    manga: { count: number }
+  }
+}
+
+export type AniListListStatus = 'CURRENT' | 'PLANNING' | 'COMPLETED' | 'DROPPED' | 'PAUSED' | 'REPEATING'
+
+export interface AniListListEntry {
+  status: AniListListStatus
+  /** 0-10 (we ask AniList to normalise every user's score format). 0 = unrated. */
+  score: number
+  progress: number
+  media: {
+    id: number
+    title: { romaji: string; english: string | null }
+    coverImage: { large: string | null }
+  }
+}
+
+export class AniListUserError extends Error {
+  constructor(public readonly code: 'not_found' | 'private' | 'unknown', message: string) {
+    super(message)
+    this.name = 'AniListUserError'
+  }
+}
+
+function toUserError(error: unknown): AniListUserError {
+  const message = error instanceof Error ? error.message : String(error)
+  if (/404|not found/i.test(message)) {
+    return new AniListUserError('not_found', "We couldn't find that AniList user. Check the username.")
+  }
+  if (/private/i.test(message)) {
+    return new AniListUserError('private', 'That list is private. Make it public in your AniList settings and try again.')
+  }
+  return new AniListUserError('unknown', 'Could not reach AniList. Please try again.')
+}
+
+/** Accepts "name", "@name" or a profile URL like https://anilist.co/user/name/ */
+export function parseAniListInput(input: string): string {
+  const trimmed = input.trim().replace(/^@/, '')
+  const urlMatch = trimmed.match(/anilist\.co\/user\/([^/?#\s]+)/i)
+  return (urlMatch?.[1] ?? trimmed).trim()
+}
+
+export async function getAniListUser(name: string): Promise<AniListUser> {
+  const query = `
+    query AniListUser($name: String) {
+      User(name: $name) {
+        id
+        name
+        avatar { large }
+        statistics {
+          anime { count }
+          manga { count }
+        }
+      }
+    }
+  `
+  try {
+    const data = await anilistQuery<{ User: AniListUser | null }>(query, { name })
+    if (!data.User) throw new AniListUserError('not_found', "We couldn't find that AniList user. Check the username.")
+    return data.User
+  } catch (error) {
+    throw error instanceof AniListUserError ? error : toUserError(error)
+  }
+}
+
+/** Every entry of a user's list for one media type, de-duplicated by media id. */
+export async function getUserMediaList(userName: string, type: 'ANIME' | 'MANGA'): Promise<AniListListEntry[]> {
+  const query = `
+    query UserMediaList($userName: String, $type: MediaType) {
+      MediaListCollection(userName: $userName, type: $type) {
+        lists {
+          isCustomList
+          entries {
+            status
+            score(format: POINT_10_DECIMAL)
+            progress
+            media {
+              id
+              title { romaji english }
+              coverImage { large }
+            }
+          }
+        }
+      }
+    }
+  `
+  try {
+    const data = await anilistQuery<{
+      MediaListCollection: { lists: { isCustomList: boolean; entries: AniListListEntry[] }[] } | null
+    }>(query, { userName, type })
+
+    // Custom lists repeat entries already present in the status lists.
+    const byMediaId = new Map<number, AniListListEntry>()
+    for (const list of data.MediaListCollection?.lists ?? []) {
+      if (list.isCustomList) continue
+      for (const entry of list.entries) byMediaId.set(entry.media.id, entry)
+    }
+    return [...byMediaId.values()]
+  } catch (error) {
+    throw error instanceof AniListUserError ? error : toUserError(error)
+  }
 }

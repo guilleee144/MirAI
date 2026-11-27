@@ -19,15 +19,6 @@ const CONNECTIONS = [
     initials: 'AL',
   },
   {
-    id: 'mal',
-    name: 'MyAnimeList',
-    desc: 'Import your MAL list',
-    color: '#2E51A2',
-    bg: 'rgba(46,81,162,0.1)',
-    border: 'rgba(46,81,162,0.25)',
-    initials: 'MAL',
-  },
-  {
     id: 'steam',
     name: 'Steam',
     desc: 'Sync your game library',

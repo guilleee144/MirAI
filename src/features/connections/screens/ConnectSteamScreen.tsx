@@ -1,23 +1,44 @@
 // src/features/connections/screens/ConnectSteamScreen.tsx
-// Migrated from app/(app)/connect-steam/index.tsx.
-import { useState } from 'react'
+// Migrated from app/(app)/connect-steam/index.tsx. Now also remembers the SteamID
+// on the profile so the library can keep playtime up to date.
+import { useEffect, useState } from 'react'
 import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Image } from 'react-native'
 import LinearGradient from 'react-native-linear-gradient'
 import { useNavigation } from '@react-navigation/native'
 import { useAuth } from '@/providers/AuthProvider'
 import { supabase } from '@/services/supabase'
 import { fetchSteamLibrary, parseSteamInput, type SteamGame, type SteamProfile } from '@/services/steam'
+import { disconnectSteam, importSteamGames, selectGamesToImport } from '../services/steamImport'
 
 export function ConnectSteamScreen() {
   const { user } = useAuth()
   const navigation = useNavigation()
 
   const [steamInput, setSteamInput] = useState('')
+  const [connectedSteamId, setConnectedSteamId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [steamProfile, setSteamProfile] = useState<SteamProfile | null>(null)
   const [games, setGames] = useState<SteamGame[]>([])
   const [gameCount, setGameCount] = useState(0)
+
+  // Prefill with the account that is already linked, if any.
+  useEffect(() => {
+    if (!user) return
+    supabase
+      .from('profiles')
+      .select('steam_id')
+      .eq('id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.steam_id) {
+          setConnectedSteamId(data.steam_id)
+          setSteamInput(data.steam_id)
+        }
+      })
+  }, [user])
+
+  const gamesToImport = selectGamesToImport(games)
 
   const handleFetch = async () => {
     if (!steamInput.trim()) {
@@ -47,47 +68,46 @@ export function ConnectSteamScreen() {
     setIsSaving(true)
 
     try {
-      await supabase.from('profiles').update({ updated_at: new Date().toISOString() }).eq('id', user.id)
+      const imported = await importSteamGames(user.id, steamProfile.steamid, games)
+      setConnectedSteamId(steamProfile.steamid)
 
-      const trackingInserts = games.slice(0, 20).map((game) => ({
-        user_id: user.id,
-        content_type: 'game' as const,
-        external_id: game.appid.toString(),
-        title: game.name,
-        cover_image: game.cover_url,
-        status: game.playtime_hours > 0 ? ('completed' as const) : ('plan_to_watch' as const),
-        progress: game.playtime_hours,
-        metadata: {
-          steam_appid: game.appid,
-          playtime_hours: game.playtime_hours,
-          playtime_2weeks: game.playtime_2weeks_hours,
-          source: 'steam',
-        },
-      }))
-
-      const { error } = await supabase.from('tracking').upsert(trackingInserts, {
-        onConflict: 'user_id,content_type,external_id',
-      })
-
-      if (error) {
-        Alert.alert('Error saving', error.message)
-        return
-      }
-
-      Alert.alert('Steam connected! 🎮', `${Math.min(games.length, 20)} games imported to your library.`, [
+      Alert.alert('Steam connected! 🎮', `${imported} games imported to your library. Playtime stays in sync automatically.`, [
         { text: 'OK', onPress: () => navigation.goBack() },
       ])
     } catch (e: any) {
-      Alert.alert('Error', e.message)
+      Alert.alert('Error', e.message ?? 'Import failed. Please try again.')
     } finally {
       setIsSaving(false)
     }
+  }
+
+  const handleDisconnect = () => {
+    if (!user) return
+    Alert.alert('Disconnect Steam?', 'Your imported games will stay in your library, but hours will stop updating.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Disconnect',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await disconnectSteam(user.id)
+            setConnectedSteamId(null)
+            setSteamProfile(null)
+            setGames([])
+            setSteamInput('')
+          } catch (e: any) {
+            Alert.alert('Error', e.message)
+          }
+        },
+      },
+    ])
   }
 
   return (
     <View style={{ flex: 1, backgroundColor: '#0B0F17' }}>
       <LinearGradient
         colors={['rgba(27,159,255,0.1)', 'transparent']}
+        pointerEvents="none"
         style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 250 }}
       />
 
@@ -106,13 +126,24 @@ export function ConnectSteamScreen() {
         </View>
 
         <View style={{ paddingHorizontal: 20 }}>
+          {connectedSteamId && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(46,229,157,0.08)', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(46,229,157,0.2)' }}>
+              <Text style={{ color: '#2EE59D', fontSize: 13, fontWeight: '600', flex: 1 }} numberOfLines={1}>
+                Steam connected ✓
+              </Text>
+              <TouchableOpacity onPress={handleDisconnect}>
+                <Text style={{ color: '#7B8496', fontSize: 13 }}>Disconnect</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           <View style={{ backgroundColor: '#141826', borderRadius: 16, padding: 16, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(27,159,255,0.2)' }}>
             <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600', marginBottom: 6 }}>How to find your Steam ID</Text>
             <Text style={{ color: '#B8C1D1', fontSize: 13, lineHeight: 20 }}>
               1. Open Steam → your profile{'\n'}
               2. Copy the URL from your browser{'\n'}
               3. Paste it below{'\n\n'}
-              Make sure your profile is set to <Text style={{ color: '#1B9FFF' }}>Public</Text> in Steam privacy settings.
+              Set your profile and <Text style={{ color: '#1B9FFF' }}>game details</Text> to Public in Steam privacy settings, otherwise games and achievements can't be read.
             </Text>
           </View>
 
@@ -157,9 +188,9 @@ export function ConnectSteamScreen() {
                   <Text style={{ color: '#7B8496', fontSize: 12 }}>{game.playtime_hours}h</Text>
                 </View>
               ))}
-              {games.length > 5 && (
+              {gamesToImport.length > 5 && (
                 <Text style={{ color: '#7B8496', fontSize: 12, marginTop: 4 }}>
-                  +{Math.min(games.length, 20) - 5} more games will be imported
+                  +{gamesToImport.length - 5} more games will be imported
                 </Text>
               )}
             </View>
@@ -171,7 +202,9 @@ export function ConnectSteamScreen() {
                 {isSaving ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>Import {Math.min(games.length, 20)} games to MirAI</Text>
+                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>
+                    {connectedSteamId === steamProfile.steamid ? 'Re-sync' : `Import ${gamesToImport.length} games to MirAI`}
+                  </Text>
                 )}
               </LinearGradient>
             </TouchableOpacity>

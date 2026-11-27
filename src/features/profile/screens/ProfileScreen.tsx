@@ -1,13 +1,13 @@
 // src/features/profile/screens/ProfileScreen.tsx
 // Migrated from app/(app)/profile.tsx.
-import { useState, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Image } from 'react-native'
 import LinearGradient from 'react-native-linear-gradient'
 import Svg, { Polygon, Circle, Line, Text as SvgText } from 'react-native-svg'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { useAuth } from '@/providers/AuthProvider'
 import { supabase } from '@/services/supabase'
-import { AniListLogo, MyAnimeListLogo, SteamLogo } from '@/components/ui/ConnectionLogos'
+import { AniListLogo, SteamLogo } from '@/components/ui/ConnectionLogos'
 import type { Database } from '@/types/supabase'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
@@ -100,28 +100,20 @@ export function ProfileScreen() {
   const [mangaCount, setMangaCount] = useState(0)
   const [gamesCount, setGamesCount] = useState(0)
 
-  useEffect(() => {
-    if (!user?.id) return
-    loadProfile()
-  }, [user?.id])
-
-  const loadProfile = async () => {
+  // Runs on every focus so changes made elsewhere (AniList/Steam import, edit
+  // profile) show up when you come back. Only the first load shows the spinner.
+  const loadProfile = useCallback(async () => {
     if (!user) return
-    setIsLoading(true)
 
     const [
       { data: profileData },
       { data: tasteData },
-      { data: steamData },
-      { data: anilistData },
       { count: animeC },
       { count: mangaC },
       { count: gamesC },
     ] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', user.id).single(),
       supabase.from('user_taste').select('*').eq('user_id', user.id).single(),
-      supabase.from('tracking').select('id').eq('user_id', user.id).eq('content_type', 'game').limit(1),
-      supabase.from('tracking').select('id').eq('user_id', user.id).in('content_type', ['anime', 'manga']).limit(1),
       supabase.from('tracking').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('content_type', 'anime').eq('status', 'completed'),
       supabase.from('tracking').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('content_type', 'manga').eq('status', 'completed'),
       supabase.from('tracking').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('content_type', 'game'),
@@ -129,13 +121,19 @@ export function ProfileScreen() {
 
     setProfile(profileData)
     setTaste(tasteData)
-    setSteamConnected((steamData?.length ?? 0) > 0)
-    setAnilistConnected((anilistData?.length ?? 0) > 0)
+    setSteamConnected(!!profileData?.steam_id)
+    setAnilistConnected(!!profileData?.anilist_username)
     setAnimeCount(animeC ?? 0)
     setMangaCount(mangaC ?? 0)
     setGamesCount(gamesC ?? 0)
     setIsLoading(false)
-  }
+  }, [user])
+
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile()
+    }, [loadProfile])
+  )
 
   if (isLoading) {
     return (
@@ -228,7 +226,6 @@ export function ProfileScreen() {
             <TouchableOpacity onPress={() => navigation.navigate('ConnectAniList' as never)}>
               <ConnectionCard name="AniList" logo={<AniListLogo size={40} />} connected={anilistConnected} />
             </TouchableOpacity>
-            <ConnectionCard name="MyAnimeList" logo={<MyAnimeListLogo size={40} />} connected={false} />
             <TouchableOpacity onPress={() => navigation.navigate('ConnectSteam' as never)}>
               <ConnectionCard name="Steam" logo={<SteamLogo size={40} />} connected={steamConnected} />
             </TouchableOpacity>

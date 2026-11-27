@@ -1,6 +1,8 @@
 // src/features/library/components/LibraryCard.tsx
 import { memo } from 'react'
 import { View, Text, TouchableOpacity, Image } from 'react-native'
+import { GameImage } from '@/components/ui/GameImage'
+import { buildImageSources } from '@/services/steamStore'
 import LinearGradient from 'react-native-linear-gradient'
 import { getStatusLabel, STATUS_COLORS } from '../constants'
 import { getPlaytimeHours, type TrackingItem } from '../libraryStats'
@@ -18,7 +20,9 @@ function LibraryCardBase({ item, onPress }: { item: TrackingItem; onPress: () =>
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={{ flex: 1, margin: 6 }}>
       <View style={{ borderRadius: 14, overflow: 'hidden', backgroundColor: '#141826', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
-        {item.cover_image ? (
+        {isGame ? (
+          <GameImage sources={buildImageSources(item.external_id, item.cover_image)} style={{ width: '100%', aspectRatio }} />
+        ) : item.cover_image ? (
           <Image source={{ uri: item.cover_image }} style={{ width: '100%', aspectRatio }} resizeMode="cover" />
         ) : (
           <LinearGradient colors={['#1B2133', '#0B0F17']} style={{ width: '100%', aspectRatio }} />

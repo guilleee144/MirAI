@@ -1,5 +1,6 @@
 // src/app/navigation/types.ts
 import type { NavigatorScreenParams } from '@react-navigation/native'
+import type { GameListCategory } from '@/services/steamStore'
 
 export type AuthStackParamList = {
   Login: undefined
@@ -23,6 +24,8 @@ export type AppTabParamList = {
 export type AppStackParamList = {
   MainTabs: NavigatorScreenParams<AppTabParamList>
   MediaDetail: { id: string; type: string }
+  GameDetail: { id: string }
+  GameList: { category: GameListCategory }
   ListAll: { type: string }
   EditProfile: undefined
   ConnectSteam: undefined

@@ -2,6 +2,7 @@
 // Replaces app/(app)/_layout.tsx (expo-router Tabs).
 import { Platform, Text, View } from 'react-native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { AppTabParamList } from './types'
 import { HomeScreen } from '@/features/home/screens/HomeScreen'
 import { ChatScreen } from '@/features/chat/screens/ChatScreen'
@@ -23,6 +24,11 @@ function TabIcon({ focused, icon, label }: { focused: boolean; icon: string; lab
 }
 
 export function AppTabs() {
+  // Android edge-to-edge: the system nav bar (3 buttons or gesture pill) draws over the app,
+  // so the tab bar must grow by the bottom inset instead of using a fixed height.
+  const insets = useSafeAreaInsets()
+  const bottomPadding = Math.max(insets.bottom, Platform.OS === 'ios' ? 24 : 8)
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -31,8 +37,8 @@ export function AppTabs() {
           backgroundColor: '#141826',
           borderTopColor: 'rgba(255,255,255,0.06)',
           borderTopWidth: 1,
-          height: Platform.OS === 'ios' ? 84 : 64,
-          paddingBottom: Platform.OS === 'ios' ? 24 : 8,
+          height: 58 + bottomPadding,
+          paddingBottom: bottomPadding,
           paddingTop: 8,
         },
         tabBarShowLabel: false,

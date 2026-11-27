@@ -3,6 +3,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import type { AppStackParamList } from './types'
 import { AppTabs } from './AppTabs'
 import { MediaDetailScreen } from '@/features/media/screens/MediaDetailScreen'
+import { GameListScreen } from '@/features/discover/screens/GameListScreen'
+import { GameDetailScreen } from '@/features/media/screens/GameDetailScreen'
 import { ListScreen } from '@/features/discover/screens/ListScreen'
 import { EditProfileScreen } from '@/features/profile/screens/EditProfileScreen'
 import { ConnectSteamScreen } from '@/features/connections/screens/ConnectSteamScreen'
@@ -15,6 +17,8 @@ export function AppStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs" component={AppTabs} />
       <Stack.Screen name="MediaDetail" component={MediaDetailScreen} />
+      <Stack.Screen name="GameDetail" component={GameDetailScreen} />
+      <Stack.Screen name="GameList" component={GameListScreen} />
       <Stack.Screen name="ListAll" component={ListScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="ConnectSteam" component={ConnectSteamScreen} />
